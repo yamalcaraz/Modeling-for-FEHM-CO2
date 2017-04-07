@@ -145,14 +145,18 @@ def apply_co2_bc(dat,sheetname):
     
     for i, row in bc.iterrows():
         
-        if pd.isnull(row['well']):
-            node = dat.grid.node_nearest_point([row['x'],row['y'],row['z']])
+        if row['zone_name'] in dat.zone:
+            row['zone_index'] = dat.zone[row['zone_name']].index
         else:
-            w_DS=pd.read_excel(wells_file,sheetname=row['well'])
-            node = find_well_node(dat,w_DS,row['z'])
+            if pd.isnull(row['well']):
+                node = dat.grid.node_nearest_point([row['x'],row['y'],row['z']])
+            else:
+                w_DS=pd.read_excel(wells_file,sheetname=row['well'])
+                node = find_well_node(dat,w_DS,row['z'])
+                
+            #create the zone using found node
+            dat.new_zone(row['zone_index'], name=row['zone_name'], nodelist=node)
         
-        #create the zone using found node
-        dat.new_zone(row['zone_index'], name=row['zone_name'], nodelist=node)
             
         if row['Type']=='co2flow':
             print 'Adding co2flow BC'
