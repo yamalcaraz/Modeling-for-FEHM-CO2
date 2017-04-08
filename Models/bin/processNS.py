@@ -129,10 +129,14 @@ def delete_temp_files():
         os.remove(filename)
         
 def plot_co2():
+    co2_hist=pd.read_excel(model_data,sheetname='CO2_hist')
+    
+    #plot co2 mass history
     co2s1=pd.read_csv(work_dir + '\\CO2_Stage1\\{}_co2mt_his.csv'.format(model_name))
     co2s2=pd.read_csv(work_dir + '\\CO2_Stage2\\{}_co2mt_his.csv'.format(model_name))
     co2_df = co2s1.append(co2s2)
     
+    co2_df.columns=['Time (days)'] + co2_hist['Name'].values.tolist()
     #remove last row if error
     if co2_df.iloc[-1][0] == 1.0:
         co2_df = co2_df.iloc[:-1]
@@ -148,7 +152,30 @@ def plot_co2():
     
     fig = ax.get_figure()
     fig.set_size_inches((7,5))
-    fig.savefig('co2 mass history.png')
+    fig.savefig('co2_mass_history.png')
+    
+    #plot temp history
+    temp_s1=pd.read_csv(work_dir + '\\CO2_Stage1\\{}_temp_his.csv'.format(model_name))
+    temp_s2=pd.read_csv(work_dir + '\\CO2_Stage2\\{}_temp_his.csv'.format(model_name))
+    temp_df = temp_s1.append(temp_s2)
+    
+    temp_df.columns=['Time (days)'] + co2_hist['Name'].values.tolist()
+    #remove last row if error
+    if temp_df.iloc[-1][0] == 1.0:
+        temp_df = temp_df.iloc[:-1]
+    
+    temp_df.sort_values('Time (days)',inplace=True)
+    temp_df.set_index('Time (days)',inplace=True)
+    ax = temp_df.plot(marker='o', ls='')
+    ax.set_ylabel(r'Temperature ($^\degree$C)')
+    ax.set_xlim([0,365.25*10])
+    ax.grid(True)
+    minorLocator=AutoMinorLocator(2)
+    ax.xaxis.set_minor_locator(minorLocator)
+    
+    fig = ax.get_figure()
+    fig.set_size_inches((7,5))
+    fig.savefig('temperature_history.png')
     
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Process NS model results')

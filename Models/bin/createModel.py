@@ -292,6 +292,7 @@ def run_first_stage():
     dat.add(co2frac)
 
     apply_co2_bc(dat,'CO2_S1_BC')
+    add_monitor_nodes(dat)
 
 ##    
 #    add relative perm
@@ -346,6 +347,7 @@ def run_second_stage():
     
 
     apply_co2_bc(dat,'CO2_S2_BC')
+    add_monitor_nodes(dat)
 
 ##    
 #    add relative perm
@@ -379,6 +381,24 @@ def run_second_stage():
     dat.run(model_name+'.dat',exe=exe)
     
     return dat
+
+def add_monitor_nodes(dat):
+    co2_hist=pd.read_excel(model_data,sheetname='CO2_hist')
+    
+    wells_file = data_dir + "MGPF Deviation Survey and Well Data1.xlsx"
+    
+    for i, row in co2_hist.iterrows():
+        
+        if pd.isnull(row['well']):
+            node = dat.grid.node_nearest_point([row['x'],row['y'],row['z']])
+        else:
+            w_DS=pd.read_excel(wells_file,sheetname=row['well'])
+            node = find_well_node(dat,w_DS,row['z'])
+        
+        if row['Type']=='monitor':
+            print 'node {} added to hist'.format(node.index)
+            dat.hist.nodelist.append(node)
+            
 
 def plot_timesteps(histfile):
     hist=fhistory(histfile)
