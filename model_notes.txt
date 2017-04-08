@@ -1,0 +1,63 @@
+3/24/2017
+
+able to make a natural state model
+
+Learnings:
+decreased the reservoir permeability from 1E-14 to 5E-15 and increasing horizontal permeability of upflow made the model converge to natural state.
+increased res perm to 8E-15 and still converging
+
+3/26/2017
+able to create NS comparison plots for matching
+To do: improve match
+
+3/27/2017
+
+Model_1: 
+increased upflow to -12, increased uflow horizontal perm, decreased reservoir perm to 6E-15
+
+fixed the preNS state by removing the temperature gradient initialization
+
+got elevation contours from: https://philgis.org/
+used QGIS to extract a raster from the contour, used grid interpolation, inverse distance weighing algorithm, radius=2000
+extracted elevation contours
+remove nodes that are above the model to extract elevations
+
+Model_1b new model to add elevations up to 2000maSL
+
+3/28/2017
+
+inactive blocks should be atmosphere blocks instead to fix the temperatures in the 'top' of the model
+able to reach natural state again
+
+3/29/2015
+
+plot the pcp and compare with simulated
+lowered down reservoir permeability to attain lower simulated pressure values
+Model_1c: best NS model so far :D
+
+able to plot multiple simulated runs
+
+Model_1e, copied from Model_1d, increased the reservoir area in the northern region to lower pressure and temp in KL area.
+
+3/30/2017
+
+Difference in pressures should be related to the elevations(overburden and water table)  of the well location, i.e. the
+try model_1g, different grid, mas masinsin in NW direction ****** this didnt work
+
+Scrap model_1g, use Model_1f still best
+
+increased permeability of upflow path in Model_1f to decrease overall pressure
+
+4/4/2017
+added the nodes in 'sides' of model to be top_zones. I hope this will prevent pressures lower than 1 bar
+heightening the permeability value of 'top' to 1E-15 prevented pressures lower than 1bar
+note: co2_gas in paraview is the  Super-Critical/Liquid CO2 Saturation, co2_aq is Gas CO2 saturation
+
+in papers from Garapati, et.al. the well spacing is only 707m
+
+4/7/2017
+Sent update
+
+4/8/2017
+Model_2c - add in constant co2 flow rate to atmosphere and top layer *this fixes the small timesteps and long simulations :D
+paraview - perm X is the porosity :((
