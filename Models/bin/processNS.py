@@ -129,14 +129,41 @@ def delete_temp_files():
         os.remove(filename)
         
 def plot_co2():
-    co2_hist=pd.read_excel(model_data,sheetname='CO2_hist')
+    plot_hist('co2','co2mt','CO2 Mass')
+    plot_hist('co2','temp','Temperature ($^\degree$C)')
+    plot_hist('co2','presCO2','$CO_2$ pressure (MPa)')
+    plot_hist('co2','presWAT','Water pressure (MPa)')
+    plot_hist('co2','co2sg','$CO_2$ gas saturation')
+    plot_hist('co2','co2sl','$CO_2$ liquid saturation')
+    plot_hist('co2','denCO2l','$CO_2$ Density (kg/m$^3$)')
+    plot_hist('co2','denCO2g','$CO_2$ Density (kg/m$^3$)')
+    
+def plot_water():
+    plot_hist('water','temp','Temperature ($^\degree$C)')
+    plot_hist('water','presWAT','Water pressure (MPa)')
+    plot_hist('water','denWAT','Water Density (kg/m$^3$)')
+
+
+
+def plot_hist(fluid,param,param_label):
+    hist=pd.read_excel(model_data,sheetname='hist')
+    
+    if fluid in ['CO2','co2']:
+        co2_sim=True
+        fluid='CO2'
+    elif fluid in ['Water','water']:
+        co2_sim=False
+        fluid='Water'
+    else:
+        print "Cannot find fluid: ", fluid 
+        return
     
     #plot co2 mass history
-    co2s1=pd.read_csv(work_dir + '\\CO2_Stage1\\{}_co2mt_his.csv'.format(model_name))
-    co2s2=pd.read_csv(work_dir + '\\CO2_Stage2\\{}_co2mt_his.csv'.format(model_name))
-    co2_df = co2s1.append(co2s2)
+    s1=pd.read_csv(work_dir + '\\{}_Stage1\\{}_{}_his.csv'.format(fluid,model_name,param))
+    s2=pd.read_csv(work_dir + '\\{}_Stage2\\{}_{}_his.csv'.format(fluid,model_name,param))
+    co2_df = s1.append(s2)
     
-    co2_df.columns=['Time (days)'] + co2_hist['Name'].values.tolist()
+    co2_df.columns=['Time (days)'] + hist['Name'].values.tolist()
     #remove last row if error
     if co2_df.iloc[-1][0] == 1.0:
         co2_df = co2_df.iloc[:-1]
@@ -144,7 +171,7 @@ def plot_co2():
     co2_df.sort_values('Time (days)',inplace=True)
     co2_df.set_index('Time (days)',inplace=True)
     ax = co2_df.plot(marker='o', ls='')
-    ax.set_ylabel('CO2 mass (kg)')
+    ax.set_ylabel(param_label)
     ax.set_xlim([0,365.25*10])
     ax.grid(True)
     minorLocator=AutoMinorLocator(2)
@@ -152,31 +179,8 @@ def plot_co2():
     
     fig = ax.get_figure()
     fig.set_size_inches((7,5))
-    fig.savefig('co2_mass_history.png')
-    
-    #plot temp history
-    temp_s1=pd.read_csv(work_dir + '\\CO2_Stage1\\{}_temp_his.csv'.format(model_name))
-    temp_s2=pd.read_csv(work_dir + '\\CO2_Stage2\\{}_temp_his.csv'.format(model_name))
-    temp_df = temp_s1.append(temp_s2)
-    
-    temp_df.columns=['Time (days)'] + co2_hist['Name'].values.tolist()
-    #remove last row if error
-    if temp_df.iloc[-1][0] == 1.0:
-        temp_df = temp_df.iloc[:-1]
-    
-    temp_df.sort_values('Time (days)',inplace=True)
-    temp_df.set_index('Time (days)',inplace=True)
-    ax = temp_df.plot(marker='o', ls='')
-    ax.set_ylabel(r'Temperature ($^\degree$C)')
-    ax.set_xlim([0,365.25*10])
-    ax.grid(True)
-    minorLocator=AutoMinorLocator(2)
-    ax.xaxis.set_minor_locator(minorLocator)
-    
-    fig = ax.get_figure()
-    fig.set_size_inches((7,5))
-    fig.savefig('temperature_history.png')
-    
+    fig.savefig(fluid+'_'+param+'_history.png')
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Process NS model results')
     parser.add_argument('-t', dest= 'tplots', action='store_true',
@@ -193,6 +197,8 @@ if __name__=='__main__':
                        help='run paraview stage1')
     parser.add_argument('-co2', dest= 'co2', action='store_true',
                        help='process co2 run results')
+    parser.add_argument('-wat', dest= 'water', action='store_true',
+                       help='process water run results')
     
     args = parser.parse_args()
     
@@ -249,6 +255,8 @@ if __name__=='__main__':
         create_pcp_plot(cont_list,[model_name])
     if args.co2:
         plot_co2()
+    if args.water:
+        plot_water()
     if args.paraview:
         launch_paraview(ns_dir)
     if args.paraview_preNS:

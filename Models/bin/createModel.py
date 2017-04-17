@@ -108,7 +108,7 @@ def assign_layers(dat, grid_2D):
 
 
 #set BC
-def apply_bc(dat,preNS_run=False):
+def apply_ns_bc(dat,preNS_run=False):
     bc=pd.read_excel(model_data,sheetname='BC')
     bc['Abspath']=work_dir+bc['Path']
     for i, row in bc.iterrows():
@@ -138,7 +138,7 @@ def apply_bc(dat,preNS_run=False):
             flow_macro.param['impedance']=row['impedance']
             dat.add(flow_macro)
 
-def apply_co2_bc(dat,sheetname):
+def apply_bc(dat,sheetname):
     bc=pd.read_excel(model_data,sheetname=sheetname)
     
     wells_file = data_dir + "MGPF Deviation Survey and Well Data1.xlsx"
@@ -166,6 +166,14 @@ def apply_co2_bc(dat,sheetname):
             flow_macro.param['energy']=row['energy']
             flow_macro.param['impedance']=row['impedance']
             flow_macro.param['bc_flag']=row['bc_flag']
+            dat.add(flow_macro)
+        if row['Type']=='flow':
+            print 'Adding flow BC'
+            flow_macro=fmacro('flow')
+            flow_macro.zone=dat.zone[row['zone_index']]
+            flow_macro.param['rate']=row['rate']
+            flow_macro.param['energy']=row['energy']
+            flow_macro.param['impedance']=row['impedance']
             dat.add(flow_macro)
         if row['Type']=='monitor':
             print 'node {} added to hist'.format(node.index)
@@ -201,7 +209,7 @@ def run_PreNS():
     dat.zone[0].Pi=10. #note: Pi should be called first before Ti
     dat.zone[0].Ti=20.
     
-    apply_bc(dat,preNS_run=True)
+    apply_ns_bc(dat,preNS_run=True)
     
     dat.tf = 1.e16
     dat.dtmax = dat.tf/10.
@@ -232,7 +240,7 @@ def run_NS(restart_from_end=False):
     
     assign_layers(dat,grid_2D)
     read_elevation_model(dat,'elevationModel.csv')
-    apply_bc(dat)
+    apply_ns_bc(dat)
     
     if restart_from_end:
         copy_incon(work_dir+'\\NS\\natural_state.ini',work_dir+'\\NS\\natural_state_restart.ini')
@@ -267,51 +275,66 @@ def run_NS(restart_from_end=False):
     return dat
 #
 
-def run_first_stage():
-    run_params=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='CO2_S1_Params')
+def run_first_stage(fluid):
+    run_params=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='S1_Params')
     run_params=run_params.set_index('Variable').T
     
-    dat = fdata(work_dir=work_dir+r"\CO2_Stage1")
+    if fluid in ['CO2','co2']:
+        co2_sim=True
+        fluid='CO2'
+        dat = fdata(work_dir=work_dir+r"\CO2_Stage1")
+    elif fluid in ['Water','water']:
+        co2_sim=False
+        fluid='Water'
+        dat = fdata(work_dir=work_dir+r"\Water_Stage1")
+    else:
+        print "Cannot find fluid: ", fluid 
+        return
     dat.grid.read(grid_3D_path)
     
     assign_layers(dat,grid_2D)
     read_elevation_model(dat,'elevationModel.csv')
-    apply_bc(dat)
+    apply_ns_bc(dat)
     
     dat.incon.read(work_dir+r'\\NS\\natural_state.ini')
-    dat.files.rsto = 'co2_first_stage.ini'
-
-    #turn on CO2 computation
-    dat.carb.on(iprtype=int(run_params['iprtype'].values[0]))
-    dat.files.co2in = data_dir+"co2_interp_table.txt"
+    dat.files.rsto = '{}_first_stage.ini'.format(fluid)
     
-    co2frac=fmacro('co2frac', zone=0, 
-                   param=(('water_rich_sat',1.0), 
-                          ('co2_rich_sat',0.0),('co2_mass_frac',1.0), 
-                          ('init_salt_conc',0.), ('override_flag',0)))
-    dat.add(co2frac)
+    if co2_sim:
+        #turn on CO2 computation
+        dat.carb.on(iprtype=int(run_params['iprtype'].values[0]))
+        dat.files.co2in = data_dir+"co2_interp_table.txt"
+    
+        co2frac=fmacro('co2frac', zone=0, 
+                       param=(('water_rich_sat',1.0), 
+                              ('co2_rich_sat',0.0),('co2_mass_frac',1.0), 
+                              ('init_salt_conc',0.), ('override_flag',0)))
+        dat.add(co2frac)
 
-    apply_co2_bc(dat,'CO2_S1_BC')
+    apply_bc(dat,'{}_S1_BC'.format(fluid))
     add_monitor_nodes(dat)
 
-##    
-#    add relative perm
-#     linear relperm model, nice to sub in when things are misbehaving
-    rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
-    dat.add(rlp)
-    #rlpm=frlpm(group=1,zone=dat.zone[0])
-    #rlpm.add_relperm ('water','exponential',[0.2,1.,3.1,1.])
-    #rlpm.add_relperm ('co2_liquid','exponential',[0.2,1.,3.1,0.8])
-    #dat.add (rlpm)
+    if co2_sim:
+    ##    
+    #    add relative perm
+    #     linear relperm model, nice to sub in when things are misbehaving
+        rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
+        dat.add(rlp)
+        #rlpm=frlpm(group=1,zone=dat.zone[0])
+        #rlpm.add_relperm ('water','exponential',[0.2,1.,3.1,1.])
+        #rlpm.add_relperm ('co2_liquid','exponential',[0.2,1.,3.1,0.8])
+        #dat.add (rlpm)
     
-    #contour values every 6 months
-    dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation', 'co2'])
+    dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation'])
+    if co2_sim:
+        dat.cont.variables.append(['co2'])
     dat.cont.format='surf'
 #    dat.cont.timestep_interval=1
     dat.cont.time_interval=365.25/4
     
     #flow history
-    dat.hist.variables.append(['temperature', 'pressure', 'flow', 'co2m','co2s','zfl'])
+    dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
+    if co2_sim:
+        dat.hist.variables.append(['co2m','co2s'])
     dat.hist.format='surf'
     
     #timesteps
@@ -322,51 +345,69 @@ def run_first_stage():
     dat.dti = 1.
     dat.dtn = run_params['dtn'].values[0]
     
-    delete_model_files(work_dir+'\\CO2_Stage1',model_name)
+    delete_model_files('{}\\{}_Stage1'.format(work_dir,fluid),model_name)
     dat.run(model_name+'.dat',exe=exe)
     
     return dat
 
-def run_second_stage():
-    run_params=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='CO2_S2_Params')
+def run_second_stage(fluid):
+    run_params=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='S2_Params')
     run_params=run_params.set_index('Variable').T
     
-    dat = fdata(work_dir=work_dir+r"\CO2_Stage2")
+    if fluid in ['CO2','co2']:
+        co2_sim=True
+        fluid='CO2'
+        dat = fdata(work_dir=work_dir+r"\CO2_Stage2")
+    elif fluid in ['Water','water']:
+        co2_sim=False
+        fluid='Water'
+        dat = fdata(work_dir=work_dir+r"\Water_Stage2")
+    else:
+        print "Cannot find fluid: ", fluid 
+        return
+    
     dat.grid.read(grid_3D_path)
     
     assign_layers(dat,grid_2D)
     read_elevation_model(dat,'elevationModel.csv')
-    apply_bc(dat)
+    apply_ns_bc(dat)
     
-    dat.incon.read(work_dir+r'\\CO2_Stage1\\co2_first_stage.ini')
-    dat.files.rsto = 'co2_second_stage.ini'
-
+    dat.incon.read(r'{0}\\{1}_Stage1\\{1}_first_stage.ini'.format(work_dir,fluid))
+    dat.files.rsto = '{}_second_stage.ini'.format(fluid)
+    
+    if co2_sim:
     #turn on CO2 computation
-    dat.carb.on(iprtype=int(run_params['iprtype'].values[0]))
-    dat.files.co2in = data_dir+"co2_interp_table.txt"
+        dat.carb.on(iprtype=int(run_params['iprtype'].values[0]))
+        dat.files.co2in = data_dir+"co2_interp_table.txt"
     
 
-    apply_co2_bc(dat,'CO2_S2_BC')
+    apply_bc(dat,'{}_S2_BC'.format(fluid))
     add_monitor_nodes(dat)
 
-##    
-#    add relative perm
-#     linear relperm model, nice to sub in when things are misbehaving
-    rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
-    dat.add(rlp)
-    #rlpm=frlpm(group=1,zone=dat.zone[0])
-    #rlpm.add_relperm ('water','exponential',[0.2,1.,3.1,1.])
-    #rlpm.add_relperm ('co2_liquid','exponential',[0.2,1.,3.1,0.8])
-    #dat.add (rlpm)
+    if co2_sim:
+    ##    
+    #    add relative perm
+    #     linear relperm model, nice to sub in when things are misbehaving
+        rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
+        dat.add(rlp)
+        #rlpm=frlpm(group=1,zone=dat.zone[0])
+        #rlpm.add_relperm ('water','exponential',[0.2,1.,3.1,1.])
+        #rlpm.add_relperm ('co2_liquid','exponential',[0.2,1.,3.1,0.8])
+        #dat.add (rlpm)
     
     #contour values every 6 months
-    dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation', 'co2'])
+    dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation'])
+    if co2_sim:
+        dat.cont.variables.append(['co2'])
+
     dat.cont.format='surf'
 #    dat.cont.timestep_interval=1
     dat.cont.time_interval=365.25/4
     
     #flow history
-    dat.hist.variables.append(['temperature', 'pressure', 'flow', 'co2m','co2s','zfl'])
+    dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
+    if co2_sim:
+        dat.hist.variables.append(['co2m','co2s'])
     dat.hist.format='surf'
     
     #timesteps
@@ -377,17 +418,17 @@ def run_second_stage():
     dat.dti = 1.
     dat.dtn = run_params['dtn'].values[0]
     
-    delete_model_files(work_dir+'\\CO2_Stage2',model_name)
+    delete_model_files('{}\\{}_Stage2'.format(work_dir,fluid),model_name)
     dat.run(model_name+'.dat',exe=exe)
     
     return dat
 
 def add_monitor_nodes(dat):
-    co2_hist=pd.read_excel(model_data,sheetname='CO2_hist')
+    hist=pd.read_excel(model_data,sheetname='hist')
     
     wells_file = data_dir + "MGPF Deviation Survey and Well Data1.xlsx"
     
-    for i, row in co2_hist.iterrows():
+    for i, row in hist.iterrows():
         
         if pd.isnull(row['well']):
             node = dat.grid.node_nearest_point([row['x'],row['y'],row['z']])
@@ -479,10 +520,14 @@ if __name__=='__main__':
                        help='run NS using ending restart file')
     parser.add_argument('-pv', dest= 'paraview', action='store_true',
                        help='launch paraview before running preNS')
-    parser.add_argument('-s1', dest= 'run_stage1', action='store_true',
+    parser.add_argument('-cs1', dest= 'run_co2_stage1', action='store_true',
                        help='run CO2 stage 1')
-    parser.add_argument('-s2', dest= 'run_stage2', action='store_true',
+    parser.add_argument('-cs2', dest= 'run_co2_stage2', action='store_true',
                        help='run CO2 stage 2')
+    parser.add_argument('-ws1', dest= 'run_water_stage1', action='store_true',
+                       help='run Water stage 1')
+    parser.add_argument('-ws2', dest= 'run_water_stage2', action='store_true',
+                       help='run Water stage 2')
     parser.add_argument('-ns', dest= 'ns', action='store_true',
                        help='run NS')
     
@@ -496,10 +541,14 @@ if __name__=='__main__':
             run_NS(restart_from_end=True)
         else:
             run_NS()
-    if args.run_stage1:
-        dat=run_first_stage()
-    if args.run_stage2:
-        dat=run_second_stage()
+    if args.run_co2_stage1:
+        dat=run_first_stage('co2')
+    if args.run_co2_stage2:
+        dat=run_second_stage('co2')
+    if args.run_water_stage1:
+        dat=run_first_stage('water')
+    if args.run_water_stage2:
+        dat=run_second_stage('water')
         
     
     plot_timesteps(work_dir+'\\NS\\'+model_name+'_temp_his.csv')
