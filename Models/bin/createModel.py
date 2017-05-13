@@ -4,6 +4,9 @@ Created on Wed Mar 22 20:37:30 2017
 
 @author: Yam
 """
+import sys,os
+bin_path = os.path.abspath(os.path.join('..', 'bin'))
+sys.path.append(bin_path)
 
 import matplotlib.path as mplPath
 import matplotlib.pyplot as plt
@@ -15,6 +18,7 @@ import os, glob, shutil
 import pandas as pd
 from fpost import fhistory
 import argparse
+from processOutfile import process_outfile
 
 work_dir=os.getcwd()
 
@@ -256,7 +260,8 @@ def run_NS(restart_from_end=False):
     
     dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation'])
     dat.cont.format='surf'
-    dat.cont.timestep_interval=50
+    dat.cont.timestep_interval=int(run_params['cont.timestep_interval'].values[0])
+    dat.cont.time_interval=run_params['cont.time_interval'].values[0]
     
     dat.hist.variables.append(['temperature','pressure'])
     dat.hist.zonelist.append('upf_bc')
@@ -328,8 +333,8 @@ def run_first_stage(fluid):
     if co2_sim:
         dat.cont.variables.append(['co2'])
     dat.cont.format='surf'
-#    dat.cont.timestep_interval=1
-    dat.cont.time_interval=365.25/4
+    dat.cont.timestep_interval=int(run_params['cont.timestep_interval'].values[0])
+    dat.cont.time_interval=run_params['cont.time_interval'].values[0]
     
     #flow history
     dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
@@ -347,6 +352,9 @@ def run_first_stage(fluid):
     
     delete_model_files('{}\\{}_Stage1'.format(work_dir,fluid),model_name)
     dat.run(model_name+'.dat',exe=exe)
+    
+    print 'exporting mass flow'
+    process_outfile('{}\\{}_Stage1\\'.format(work_dir,fluid),model_name+'.outp')
     
     return dat
 
@@ -401,8 +409,8 @@ def run_second_stage(fluid):
         dat.cont.variables.append(['co2'])
 
     dat.cont.format='surf'
-#    dat.cont.timestep_interval=1
-    dat.cont.time_interval=365.25/4
+    dat.cont.timestep_interval=int(run_params['cont.timestep_interval'].values[0])
+    dat.cont.time_interval=run_params['cont.time_interval'].values[0]
     
     #flow history
     dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
@@ -420,6 +428,9 @@ def run_second_stage(fluid):
     
     delete_model_files('{}\\{}_Stage2'.format(work_dir,fluid),model_name)
     dat.run(model_name+'.dat',exe=exe)
+    
+    print 'exporting mass flow'
+    process_outfile('{}\\{}_Stage2\\'.format(work_dir,fluid),model_name+'.outp')
     
     return dat
 
@@ -551,4 +562,4 @@ if __name__=='__main__':
         dat=run_second_stage('water')
         
     
-    plot_timesteps(work_dir+'\\NS\\'+model_name+'_temp_his.csv')
+#    plot_timesteps(work_dir+'\\NS\\'+model_name+'_temp_his.csv')

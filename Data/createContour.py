@@ -32,7 +32,7 @@ wells_DS=pd.read_excel(wells_file,sheetname=None)
 ns_temp_df=pd.read_excel(ns_temp_file,sheetname=None,parse_cols='A:B',names=['T','MRSL'])
 
 
-zlist=[500.,250.]
+zlist=[500.,250.,0,-250.,-500]
 
 def plot_contour(z):
     xyt=[]
@@ -76,6 +76,8 @@ def plot_contour(z):
         ax.annotate(label, xy=(x, y),color='b',size='8')
     
     ax.grid(True)
+    ax.set_xlabel('Easting, mE')
+    ax.set_ylabel('Northing, mN')
     
     fig.savefig('contourT_'+str(z)+'.png',dpi=300)
     plt.close(fig)

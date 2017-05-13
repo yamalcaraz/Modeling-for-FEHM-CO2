@@ -61,3 +61,13 @@ Sent update
 4/8/2017
 Model_2c - add in constant co2 flow rate to atmosphere and top layer *this fixes the small timesteps and long simulations :D
 paraview - perm X is the porosity :((
+
+4/18/2017
+The optimization will be done by adjusting the mass flow rate distribution to gain the maximum heat extraction. This can be solved by using $\cdot{m} \Delta h$
+Comparison between water and CO_2 is done by completing the closed loop, similar to Adams, 2015.
+
+4/22/2017
+Model_2d: CO2 simulation, buoyancy effect only seen in the early parts of 2nd stage, when inijection CO2 pressure gets lower and turns into gas, buoyancy disappears. How to maximize this? Drill deeper?
+Yep, setting lower injection depth will do. But distance between injection and production depth should be minimized to lower the bottomhole pressures between them.
+Model_2f: try putting the system at 250m APO region: result, massflow drains fast, should place injection just beneath caprock,
+Model_2f: Try adjusting perm in kl_mid 0m
