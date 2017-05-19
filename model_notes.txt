@@ -71,3 +71,23 @@ Model_2d: CO2 simulation, buoyancy effect only seen in the early parts of 2nd st
 Yep, setting lower injection depth will do. But distance between injection and production depth should be minimized to lower the bottomhole pressures between them.
 Model_2f: try putting the system at 250m APO region: result, massflow drains fast, should place injection just beneath caprock,
 Model_2f: Try adjusting perm in kl_mid 0m
+
+
+5/16/2017
+
+Tried refining grid
+Model 3b : refined horizontal only
+3 : horizontal and vertical 2x resolution
+3c : horizontal and some vertical
+
+5/17/2017
+Model 3d: optimize flow rates, change some permeability layer 0m
+Model 4: 4 times resolution from model final
+
+Model 3e: adjust kl_mid perm from 1E-15 to 2E-15
+
+5/19/2017
+
+Model 3f: sensitivity wrt to ambient temperature:
+set BC from 20 degrees to  30 degrees C
+inj temp to 35 degrees C

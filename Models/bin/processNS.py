@@ -284,9 +284,9 @@ if __name__=='__main__':
     if args.water:
         plot_water()
     if args.paraview:
-        launch_paraview(ns_dir)
+        launch_paraview(ns_dir,args.td)
     if args.paraview_preNS:
-        launch_paraview(preNS_dir)
+        launch_paraview(preNS_dir,args.td)
     if args.paraview_co2_stage1:
         launch_paraview(co2_s1_dir,args.td)
     if args.paraview_co2_stage2:

@@ -11,8 +11,13 @@ from scipy.interpolate import RectBivariateSpline as rbs
 import numpy as np
 from fdata import fdata,fzone
 
-grid_dir = r"D:\Users\Yam\Desktop\Thesis\Modeling Directory\Grid\MGPF_Grid.inp"
-data_dir = r"D:\Users\Yam\Desktop\Thesis\Modeling Directory\Data"
+work_dir=os.getcwd()
+
+dirs=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='Dir')
+dirs=dirs.set_index('Variable').T
+
+grid_dir = grid_3D_path = dirs['grid_3D_path'].values[0]
+data_dir = data_dir = dirs['data_dir'].values[0]
 elevation_data= data_dir+'\\Mt. Apo Elevations\\Elevations.xyz'
 
 data = pd.read_csv(elevation_data,names=['x','y','z'],header=None,sep=' ')

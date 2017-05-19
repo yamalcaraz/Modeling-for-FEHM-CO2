@@ -15,6 +15,7 @@ import numpy as np
 from CoolProp.CoolProp import PropsSI, PhaseSI
 import argparse
 from matplotlib.ticker import AutoMinorLocator
+from fdata import fcontour
 
 work_dir=os.getcwd()
 model_data = os.path.abspath(work_dir+"\\ModelData.xlsx")
@@ -48,11 +49,16 @@ def get_data(fluid):
     s1=pd.read_csv(work_dir + '\\{}_Stage1\\{}_{}_his.csv'.format(fluid,model_name,param))
     s2=pd.read_csv(work_dir + '\\{}_Stage2\\{}_{}_his.csv'.format(fluid,model_name,param))
     pres_df = s1.append(s2)
-        
+    
+    #remove last row if error
+    if pres_df.iloc[-1][0] == 1.0:
+        pres_df = pres_df.iloc[:-1]
+    
     pres_df.sort_values('Time (days)',inplace=True)
+    pres_df.drop_duplicates(inplace=True)
     pres_df.set_index('Time (days)',inplace=True)
     pres_df.columns=[int(i.split()[-1]) for i in pres_df.columns.tolist()]
-    pres_df.drop_duplicates(inplace=True)
+
     
     param='temp'
     
@@ -60,10 +66,13 @@ def get_data(fluid):
     s2=pd.read_csv(work_dir + '\\{}_Stage2\\{}_{}_his.csv'.format(fluid,model_name,param))
     temp_df = s1.append(s2)
     
+    if temp_df.iloc[-1][0] == 1.0:
+        temp_df = temp_df.iloc[:-1]
+    
     temp_df.sort_values('Time (days)',inplace=True)
+    temp_df.drop_duplicates(inplace=True)
     temp_df.set_index('Time (days)',inplace=True)
     temp_df.columns=[int(i.split()[-1]) for i in temp_df.columns.tolist()]
-    temp_df.drop_duplicates(inplace=True)
     
     s1=pd.read_csv(work_dir + '\\{}_Stage1\\massflow_his.csv'.format(fluid,model_name))
     s2=pd.read_csv(work_dir + '\\{}_Stage2\\massflow_his.csv'.format(fluid,model_name))
@@ -237,6 +246,21 @@ def plot_q(fluid):
     fig.savefig(fluid+'_'+'q_history.png')
     
     
+def cont_hist(fluid,stage):
+    model_name=work_dir.split('\\')[-1]
+    cont=fcontour(work_dir+'\\{}_Stage{}\\{}.*_days_sca_node.csv'.format(fluid,stage,model_name))
+    
+    return cont
+    
+    
+def extract_node_hist(node, cont):
+    n_dict = cont.node(node-1)
+    n_df=pd.DataFrame(n_dict)
+    n_df['time'] = cont.times  
+    
+    
+    return n_df
+
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Process WHP and Qrate')
     parser.add_argument('-q', dest= 'qplot', action='store_true',
@@ -250,10 +274,10 @@ if __name__=='__main__':
     
     if args.qplot:
         plot_q('CO2')
-        plot_q('Water')
+#        plot_q('Water')
     if args.whpplot:
         plot_whp('CO2')
-        plot_whp('Water')
+#        plot_whp('Water')
     if args.wsplot:
         plot_wellsim(3652.5)
     

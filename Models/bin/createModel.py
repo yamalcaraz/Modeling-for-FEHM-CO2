@@ -142,10 +142,12 @@ def apply_ns_bc(dat,preNS_run=False):
             flow_macro.param['impedance']=row['impedance']
             dat.add(flow_macro)
 
-def apply_bc(dat,sheetname):
+def apply_bc(dat,sheetname,rates=[]):
     bc=pd.read_excel(model_data,sheetname=sheetname)
     
     wells_file = data_dir + "MGPF Deviation Survey and Well Data1.xlsx"
+    
+    i_opt = 0
     
     for i, row in bc.iterrows():
         
@@ -159,14 +161,19 @@ def apply_bc(dat,sheetname):
                 node = find_well_node(dat,w_DS,row['z'])
                 
             #create the zone using found node
-            dat.new_zone(row['zone_index'], name=row['zone_name'], nodelist=node)
+            dat.new_zone(int(row['zone_index']), name=row['zone_name'], nodelist=node, overwrite=True)
         
             
         if row['Type']=='co2flow':
             print 'Adding co2flow BC'
             flow_macro=fmacro('co2flow')
             flow_macro.zone=dat.zone[row['zone_index']]
-            flow_macro.param['rate']=row['rate']
+            if row['optimize']==1:
+                print i_opt, rates
+                flow_macro.param['rate']=rates[i_opt]
+                i_opt+=1
+            else:
+                flow_macro.param['rate']=row['rate']
             flow_macro.param['energy']=row['energy']
             flow_macro.param['impedance']=row['impedance']
             flow_macro.param['bc_flag']=row['bc_flag']
@@ -217,7 +224,7 @@ def run_PreNS():
     
     dat.tf = 1.e16
     dat.dtmax = dat.tf/10.
-    dat.dtn = 500
+    dat.dtn = 5000
     dat.files.rsto = 'restart_file.ini'
     
     dat.cont.variables.append(['pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation' ])
@@ -297,9 +304,11 @@ def run_first_stage(fluid):
         return
     dat.grid.read(grid_3D_path)
     
-    assign_layers(dat,grid_2D)
-    read_elevation_model(dat,'elevationModel.csv')
-    apply_ns_bc(dat)
+#    assign_layers(dat,grid_2D)
+#    read_elevation_model(dat,'elevationModel.csv')
+#    apply_ns_bc(dat)
+    
+    dat.read(r'{0}\\NS\\{1}.dat'.format(work_dir,model_name))
     
     dat.incon.read(work_dir+r'\\NS\\natural_state.ini')
     dat.files.rsto = '{}_first_stage.ini'.format(fluid)
@@ -316,6 +325,9 @@ def run_first_stage(fluid):
         dat.add(co2frac)
 
     apply_bc(dat,'{}_S1_BC'.format(fluid))
+    
+    dat.hist.nodelist=[]
+    dat.hist.zonelist=[]
     add_monitor_nodes(dat)
 
     if co2_sim:
@@ -329,6 +341,7 @@ def run_first_stage(fluid):
         #rlpm.add_relperm ('co2_liquid','exponential',[0.2,1.,3.1,0.8])
         #dat.add (rlpm)
     
+    dat.cont.variables=[]
     dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation'])
     if co2_sim:
         dat.cont.variables.append(['co2'])
@@ -337,6 +350,7 @@ def run_first_stage(fluid):
     dat.cont.time_interval=run_params['cont.time_interval'].values[0]
     
     #flow history
+    dat.hist.variables=[]
     dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
     if co2_sim:
         dat.hist.variables.append(['co2m','co2s'])
@@ -358,7 +372,7 @@ def run_first_stage(fluid):
     
     return dat
 
-def run_second_stage(fluid):
+def run_second_stage(fluid,rates=[]):
     run_params=pd.read_excel(work_dir+"\\ModelData.xlsx",sheetname='S2_Params')
     run_params=run_params.set_index('Variable').T
     
@@ -376,9 +390,12 @@ def run_second_stage(fluid):
     
     dat.grid.read(grid_3D_path)
     
-    assign_layers(dat,grid_2D)
-    read_elevation_model(dat,'elevationModel.csv')
-    apply_ns_bc(dat)
+#    assign_layers(dat,grid_2D)
+#    read_elevation_model(dat,'elevationModel.csv')
+#    apply_ns_bc(dat)
+
+    #read dat file from Stage1
+    dat.read(r'{0}\\{1}_Stage1\\{2}.dat'.format(work_dir,fluid,model_name))
     
     dat.incon.read(r'{0}\\{1}_Stage1\\{1}_first_stage.ini'.format(work_dir,fluid))
     dat.files.rsto = '{}_second_stage.ini'.format(fluid)
@@ -388,8 +405,14 @@ def run_second_stage(fluid):
         dat.carb.on(iprtype=int(run_params['iprtype'].values[0]))
         dat.files.co2in = data_dir+"co2_interp_table.txt"
     
-
-    apply_bc(dat,'{}_S2_BC'.format(fluid))
+    #remove bc from previous run
+    while len(dat.co2flowlist) > 0:
+        for m in dat.co2flowlist:
+            dat.delete(m)
+        
+    apply_bc(dat,'{}_S2_BC'.format(fluid),rates)
+    dat.hist.nodelist=[]
+    dat.hist.zonelist=[]
     add_monitor_nodes(dat)
 
     if co2_sim:
@@ -404,6 +427,7 @@ def run_second_stage(fluid):
         #dat.add (rlpm)
     
     #contour values every 6 months
+    dat.cont.variables = []
     dat.cont.variables.append(['xyz','pressure', 'temperature', 'perm_x','perm_y','perm_z','porosity','saturation'])
     if co2_sim:
         dat.cont.variables.append(['co2'])
@@ -413,6 +437,7 @@ def run_second_stage(fluid):
     dat.cont.time_interval=run_params['cont.time_interval'].values[0]
     
     #flow history
+    dat.hist.variables = []
     dat.hist.variables.append(['temperature', 'pressure', 'flow','density','zfl'])
     if co2_sim:
         dat.hist.variables.append(['co2m','co2s'])
@@ -427,6 +452,8 @@ def run_second_stage(fluid):
     dat.dtn = run_params['dtn'].values[0]
     
     delete_model_files('{}\\{}_Stage2'.format(work_dir,fluid),model_name)
+    
+    print 'writing input file'
     dat.run(model_name+'.dat',exe=exe)
     
     print 'exporting mass flow'
@@ -562,4 +589,4 @@ if __name__=='__main__':
         dat=run_second_stage('water')
         
     
-#    plot_timesteps(work_dir+'\\NS\\'+model_name+'_temp_his.csv')
+    plot_timesteps(work_dir+'\\NS\\'+model_name+'_temp_his.csv')

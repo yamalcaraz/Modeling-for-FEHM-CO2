@@ -15,7 +15,7 @@ import os
 from scipy.interpolate import Rbf
 
 #files
-data_dir = "D:/Users/Yam/Desktop/Thesis/Modeling Directory/Data/"
+data_dir = "D:/Thesis/Modeling Directory/Data/"
 wells_file = data_dir + "MGPF Deviation Survey and Well Data1.xlsx"
 ns_temp_file = data_dir + "MAGBU New Temperature Interpretation.xlsx"
 well_list = data_dir + "ModelWellList.xlsx"
@@ -32,7 +32,7 @@ wells_DS=pd.read_excel(wells_file,sheetname=None)
 ns_temp_df=pd.read_excel(ns_temp_file,sheetname=None,parse_cols='A:B',names=['T','MRSL'])
 
 
-zlist=[500.,250.,0,-250.,-500]
+zlist=[0]
 
 def plot_contour(z):
     xyt=[]
@@ -47,6 +47,8 @@ def plot_contour(z):
         w_df = ns_temp_df[w]
         w_df=w_df.sort_values('MRSL')
         if not(any(w_df.MRSL>=z) and any(w_df.MRSL<=z)):
+            print w_df.MRSL
+            print z
             print '{} at {} not within well'.format(w,z)
             continue
         #get only DS on cont.z values
