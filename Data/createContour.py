@@ -32,9 +32,9 @@ wells_DS=pd.read_excel(wells_file,sheetname=None)
 ns_temp_df=pd.read_excel(ns_temp_file,sheetname=None,parse_cols='A:B',names=['T','MRSL'])
 
 
-zlist=[0]
 
-def plot_contour(z):
+
+def plot_contour(z, method = 'multiquadric'):
     xyt=[]
     wells_with_data=[]
     
@@ -57,7 +57,9 @@ def plot_contour(z):
         
     T=np.array(xyt)
     
-    f=Rbf(T[:,0],T[:,1],T[:,2])
+    f=Rbf(T[:,0],T[:,1],T[:,2], function = method)
+    
+    print 'epsilon is {}'.format(f.epsilon)
     
     # interpolate onto a 100x100 regular grid
     xmin,ymax=521536.243,777812.558
@@ -81,8 +83,13 @@ def plot_contour(z):
     ax.set_xlabel('Easting, mE')
     ax.set_ylabel('Northing, mN')
     
-    fig.savefig('contourT_'+str(z)+'.png',dpi=300)
+    fig.savefig('contourT_'+str(z)+'_'+method+'.png',dpi=300)
     plt.close(fig)
 
+zlist=[-250]
+
 for z in zlist:
-    plot_contour(z)
+    plot_contour(z,method = 'multiquadric')
+    plot_contour(z,method = 'gaussian')
+    plot_contour(z,method = 'linear')
+    plot_contour(z,method = 'cubic')

@@ -19,6 +19,7 @@ def read_contours(model_names=[],multi=False):
     cont_list=[]
     if multi:
         for name in model_names:
+#            print '**********' + models_dir
             cont_list += [fcontour(models_dir+'\\'+name+'\\NS\\'+name+'.*_days_sca_node.csv',latest=True)]
     else:
         cont_list= [fcontour(ns_dir+'\\'+model_names[0]+'.*_days_sca_node.csv',latest=True)]
@@ -26,56 +27,162 @@ def read_contours(model_names=[],multi=False):
         
     return cont_list
 
-def plot_simulated(ax, zs, fs, color, model_name):
-    ax.plot(fs,zs,color=color,marker='o',linestyle='-',label=model_name)
+def plot_simulated(ax, zs, fs, color, model_name, ls='-', lw=2):
+    ax.plot(fs,zs,color=color,marker='o',linestyle=ls,lw=lw, ms=4,label=model_name)
     
 def plot_measured(ax, zd, fd):
     ax.plot(fd,zd,color='red',marker='^',linestyle='',label='Measured')
     
-def setup_plot(ax, well):
-    ax.legend()
+def setup_plot(ax, well, xmin=0, xmax=350):
+    ax.legend(prop={'size':8})
     ax.set_title(well)
     ax.set_xlabel('Temperature (degC)')
     ax.set_ylabel('Elevation (mRSL)')
-    ax.set_xlim(0,350)
+    ax.set_xlim(xmin,xmax)
 
-def create_NS_plots(cont_list,model_names,savetopdf=True):
+def setup_kplot(ax, well, xmin=np.log10(1E-18), xmax=np.log10(1E-11)):
+    ax.legend(prop={'size':8})
+    ax.set_title(well)
+    ax.set_xlabel('Permeability ($log_{10}m^2$)')
+    ax.set_ylabel('Elevation (mRSL)')
+    ax.set_xlim(xmin,xmax)
+
+def create_NS_plots(cont_list,model_names,savetopdf=True, basemodel='', threshold=30):
 
     #get NS Temp
     ns_temp_df=pd.read_excel(ns_temp_file,sheetname=None,parse_cols='A:B',names=['T','MRSL'])
     
     if savetopdf:
-        pdf= PdfPages(work_dir+'\\NSresults.pdf')
+        pdf= PdfPages(work_dir+'\\'+args.figname+'NSresults.pdf')
+        if args.plot_k:
+            kpdf= PdfPages(work_dir+'\\'+args.figname+'Kprofile.pdf')
     
     well_chunks = [wells[i:i+4] for i in range(0, len(wells), 4)]
+    
+    profiles = {}
+    kprofiles = {}
     
     for i_chunk, chunk in enumerate(well_chunks):
         fig,ax=plt.subplots(nrows=2,ncols=2,figsize=(10,7))
         ax=ax.flatten()
+        if args.plot_k:
+            k_fig,k_ax=plt.subplots(nrows=2,ncols=2,figsize=(10,7))
+            k_ax=k_ax.flatten()
+        
+        
         for i,w in enumerate(chunk):
             plot_measured(ax[i],ns_temp_df[w]['MRSL'],ns_temp_df[w]['T'])
             
             w_DS = wells_DS[w].loc[:,['Easting','Northing','MRSL']]
             w_DS=w_DS.sort_values('MRSL')
             #get only DS on cont.z values
+            profiles[w]={}
             for ci,cont in enumerate(cont_list):
                 z=cont.z
                 x=np.interp(z,w_DS['MRSL'],w_DS['Easting'])
                 y=np.interp(z,w_DS['MRSL'],w_DS['Northing'])
                 coords = np.array((x,y,z)).T
                 prof=cont.profile('T',coords)
-                
+                profiles[w][model_names[ci]]=prof
                 plot_simulated(ax[i],prof[:,2],prof[:,3],colors[ci],model_names[ci])
-            setup_plot(ax[i],w)
+                if args.plot_k:
+                    kx_prof = cont.profile('perm_x',coords)
+                    kz_prof = cont.profile('perm_z',coords)
+                    plot_simulated(k_ax[i],kx_prof[:,2],kx_prof[:,3],colors[ci],model_names[ci] + '_kx', ls = '-',lw=1)
+                    plot_simulated(k_ax[i],kz_prof[:,2],kz_prof[:,3],colors[ci],model_names[ci]+ '_kz', ls = '--',lw=1)
+                if model_names[ci] == basemodel:
+                    base_elev = prof[:,2]
+                    base_temp = prof[:,3]
             
+            if len(basemodel)>0 and threshold>0.:
+                ax[i].plot(base_temp+threshold,base_elev,'k--', lw=1)
+                ax[i].plot(base_temp-threshold,base_elev,'k--', lw=1, label = '{}$^\circ$C threshold'.format(threshold))
+                
+            setup_plot(ax[i],w)
+            if args.plot_k:
+                setup_kplot(k_ax[i],w)
+        fig.tight_layout()
+        if args.plot_k:
+            k_fig.tight_layout()
+        if savetopdf:
+            pdf.savefig(fig)
+            if args.plot_k:
+                kpdf.savefig(k_fig)
+        else:
+            fig.savefig(args.figname + 'NSresults_{}.png'.format(i_chunk))
+            if args.plot_k:
+                k_fig.savefig(args.figname + 'Kprofile_{}.png'.format(i_chunk))
+        plt.close(fig)
+    if savetopdf:
+        pdf.close()
+        if args.plot_k:
+            kpdf.close()
+    
+    if args.sens:
+        plot_sensitivity(profiles,args.base_model,threshold,savetopdf)
+        
+    if args.rsquared:
+        compute_rsquared(profiles,args.base_model,threshold)
+        
+def plot_sensitivity(profiles,base_model,threshold,savetopdf,temp_bounds=170):
+    
+    well_chunks = [wells[i:i+4] for i in range(0, len(wells), 4)]
+    
+    if savetopdf:
+        pdf= PdfPages(work_dir+'\\'+args.figname+'NSsens.pdf')
+    
+    for i_chunk, chunk in enumerate(well_chunks):
+        fig,ax=plt.subplots(nrows=2,ncols=2,figsize=(10,7))
+        ax=ax.flatten()
+        for i,w in enumerate(chunk):
+            prof_dict = profiles[w]
+            models = [j for j in prof_dict.keys() if j!=base_model]
+            prof_df = pd.DataFrame(index = prof_dict[base_model][:,2],data= {base_model:prof_dict[base_model][:,3]})
+            sens_df = pd.DataFrame(index = prof_dict[base_model][:,2])
+            for mi, m in enumerate(models):
+                df_m=pd.DataFrame(index = prof_dict[m][:,2],data= {m:prof_dict[m][:,3]})
+                prof_df = prof_df.join(df_m)
+                sens_df[m] = prof_df[base_model]-prof_df[m]
+                plot_simulated(ax[i],sens_df.index.values,sens_df[m].values,colors[mi],m)
+            setup_plot(ax[i],w,-temp_bounds,temp_bounds)
+        
+            ax[i].plot([0,0],[sens_df.index.values[0],sens_df.index.values[-1]],'k--')
+            if threshold>0.:
+                ax[i].plot([threshold,threshold],[sens_df.index.values[0],sens_df.index.values[-1]],'r--')
+                ax[i].plot([-threshold,-threshold],[sens_df.index.values[0],sens_df.index.values[-1]],'r--')
+        
         fig.tight_layout()
         if savetopdf:
             pdf.savefig(fig)
         else:
-            fig.savefig('NSresults_{}.png'.format(i_chunk))
+            fig.savefig(args.figname + 'NSsens_{}.png'.format(i_chunk))
         plt.close(fig)
+        
     if savetopdf:
         pdf.close()
+
+def compute_rsquared(profiles,base_model,threshold):
+    
+    rsquared_dict={}
+    num_points={}
+    
+    for i,w in enumerate(wells):
+        prof_dict = profiles[w]
+        models = [j for j in prof_dict.keys() if j!=base_model]
+        prof_df = pd.DataFrame(index = prof_dict[base_model][:,2],data= {base_model:prof_dict[base_model][:,3]})
+        sens_df = pd.DataFrame(index = prof_dict[base_model][:,2])
+        for mi, m in enumerate(models):
+            df_m=pd.DataFrame(index = prof_dict[m][:,2],data= {m:prof_dict[m][:,3]})
+            prof_df = prof_df.join(df_m)
+            sens_df[m] = prof_df[base_model]-prof_df[m]
+        rsquared_dict[w] = (sens_df**2).sum()
+        num_points[w] = sens_df.shape[0]
+        
+    n=sum([num_points[k] for k in num_points.keys()])
+    rsquared=pd.DataFrame(rsquared_dict).T.sum()
+    std = np.sqrt(rsquared)/n    
+    pd.DataFrame({'rsquared':rsquared,'std':std}).to_excel(args.figname+'rsquared.xlsx')
+    
     
 def create_pcp_plot(cont_list,model_names, savetopdf=True):
     #get pcp data
@@ -112,15 +219,15 @@ def create_pcp_plot(cont_list,model_names, savetopdf=True):
             if len(cont_list)==1:
                 ax.annotate(w, xy=(pcp_sim,pcp_depth),color=colors[ci],size='8')
     
-    ax.legend(meas_plot + sim_plots,['Measured']+model_names, loc = 'best')
+    ax.legend(meas_plot + sim_plots,['Measured']+model_names, loc = 'best',prop={'size':8})
     ax.set_title('PCP Plots')
     ax.set_xlabel('Pressure (MPag)')
     ax.set_ylabel('Elevation (mRSL)')
     
     if savetopdf:
-        fig.savefig('PCP_Plot.pdf')
+        fig.savefig(args.figname + 'PCP_Plot.pdf')
     else:
-        fig.savefig('PCP_Plot.png')
+        fig.savefig(args.figname + 'PCP_Plot.png')
     
 def launch_paraview(run_dir,td):
     #post-processing
@@ -136,26 +243,25 @@ def delete_temp_files():
         print 'deleting ', filename
         os.remove(filename)
         
-def plot_co2():
-    plot_hist('co2','co2mt','CO$_2$ Mass (kg)')
-    plot_hist('co2','temp','Temperature ($^\degree$C)')
-    plot_hist('co2','presCO2','CO$_2$ pressure (MPa)')
-    plot_hist('co2','presWAT','Water pressure (MPa)')
-    plot_hist('co2','co2sg','CO$_2$ gas saturation')
-    plot_hist('co2','co2sl','CO$_2$ liquid saturation')
-    plot_hist('co2','denCO2l','CO$_2$ Density (kg/m$^3$)')
-    plot_hist('co2','denCO2g','CO$_2$ Density (kg/m$^3$)')
+def plot_co2(model_names=[]):
+    plot_hist('co2','co2mt','CO$_2$ Mass (kg)',model_names)
+    plot_hist('co2','temp','Temperature ($^\degree$C)',model_names)
+    plot_hist('co2','presCO2','CO$_2$ pressure (MPa)',model_names)
+    plot_hist('co2','presWAT','Water pressure (MPa)',model_names)
+    plot_hist('co2','co2sg','CO$_2$ gas saturation',model_names)
+    plot_hist('co2','co2sl','CO$_2$ liquid saturation',model_names)
+    plot_hist('co2','denCO2l','CO$_2$ Density (kg/m$^3$)',model_names)
+    plot_hist('co2','denCO2g','CO$_2$ Density (kg/m$^3$)',model_names)
     
-def plot_water():
-    plot_hist('water','temp','Temperature ($^\degree$C)')
-    plot_hist('water','presWAT','Water pressure (MPa)')
-    plot_hist('water','denWAT','Water Density (kg/m$^3$)')
+def plot_water(model_names=[]):
+    plot_hist('water','temp','Temperature ($^\degree$C)',model_names)
+    plot_hist('water','presWAT','Water pressure (MPa)',model_names)
+    plot_hist('water','denWAT','Water Density (kg/m$^3$)',model_names)
 
-
-
-def plot_hist(fluid,param,param_label):
-    hist=pd.read_excel(model_data,sheetname='hist')
+def plot_hist(fluid,param,param_label,model_names):
     
+    colors = ['#1f77b4','#ff7f0e','#2ca02c','#d62728']
+    linestyles = ['-',(0,[5,1]),(0,[1,1])]
     if fluid in ['CO2','co2']:
         fluid='CO2'
     elif fluid in ['Water','water']:
@@ -164,18 +270,42 @@ def plot_hist(fluid,param,param_label):
         print "Cannot find fluid: ", fluid 
         return
     
-    s1=pd.read_csv(work_dir + '\\{}_Stage1\\{}_{}_his.csv'.format(fluid,model_name,param))
-    s2=pd.read_csv(work_dir + '\\{}_Stage2\\{}_{}_his.csv'.format(fluid,model_name,param))
-    co2_df = s1.append(s2)
+    fig, ax = plt.subplots() 
     
-    co2_df.columns=['Time (days)'] + hist['Name'].values.tolist()
-    #remove last row if error
-    if co2_df.iloc[-1][0] == 1.0:
-        co2_df = co2_df.iloc[:-1]
-    
-    co2_df.sort_values('Time (days)',inplace=True)
-    co2_df.set_index('Time (days)',inplace=True)
-    ax = co2_df.plot(marker='o', ls='')
+    if args.multi:
+        for model_name,ls in zip(model_names,linestyles[:len(model_names)]):
+            hist=pd.read_excel('{}\\{}\\ModelData.xlsx'.format(work_dir,model_name),sheetname='hist')
+            
+            s1=pd.read_csv(work_dir + '\\{1}\\{0}_Stage1\\{1}_{2}_his.csv'.format(fluid,model_name,param))
+            s2=pd.read_csv(work_dir + '\\{1}\\{0}_Stage2\\{1}_{2}_his.csv'.format(fluid,model_name,param))
+            co2_df = s1.append(s2)    
+            labels = ['{}_{}'.format(model_name,p) for p in hist['Name'].values.tolist()]
+            co2_df.columns=['Time (days)'] + labels
+        #remove last row if error
+            if co2_df.iloc[-1][0] == 1.0:
+                co2_df = co2_df.iloc[:-1]
+            
+            co2_df.sort_values('Time (days)',inplace=True)
+            co2_df.set_index('Time (days)',inplace=True)
+            for column,color in zip(co2_df.columns,colors[:len(co2_df.columns)]):
+                co2_df[column].plot(ax = ax, marker='', c=color, ls=ls, ms=2)
+    else:
+        model_name=model_names[0]
+        hist=pd.read_excel(model_data,sheetname='hist')
+        
+        s1=pd.read_csv(work_dir + '\\{}_Stage1\\{}_{}_his.csv'.format(fluid,model_name,param))
+        s2=pd.read_csv(work_dir + '\\{}_Stage2\\{}_{}_his.csv'.format(fluid,model_name,param))
+        co2_df = s1.append(s2)    
+        
+        co2_df.columns=['Time (days)'] + hist['Name'].values.tolist()
+        #remove last row if error
+        if co2_df.iloc[-1][0] == 1.0:
+            co2_df = co2_df.iloc[:-1]
+        
+        co2_df.sort_values('Time (days)',inplace=True)
+        co2_df.set_index('Time (days)',inplace=True)
+        co2_df.plot(ax = ax, marker='o', ls='', ms=2)
+        
     ax.set_ylabel(param_label)
     ax.set_xlim([0,365.25*10])
     ax.grid(True)
@@ -185,11 +315,15 @@ def plot_hist(fluid,param,param_label):
     if fluid=='CO2' and 'pres' in param:
         pcrit_CO2 = 7.39 #MPa
         ax.plot([0,365.25*10],[pcrit_CO2,pcrit_CO2],'k--',label = 'CO$_2$ Critical Pressure')
-        ax.legend()
     
-    fig = ax.get_figure()
+#    lgd=ax.legend(prop={'size':8})
+    if 'pres' in param or 'mt' in param:
+        lgd=ax.legend(bbox_to_anchor=(1.1,1.1),prop={'size':8})
+    else:
+        lgd=ax.legend(loc='best',prop={'size':8})
+    
     fig.set_size_inches((7,5))
-    fig.savefig(fluid+'_'+param+'_history.png')
+    fig.savefig(args.figname+fluid+'_'+param+'_history.png',bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     return co2_df
 
@@ -217,8 +351,20 @@ if __name__=='__main__':
                        help='process water run results')
     parser.add_argument('-td', dest= 'td', action='store_true', default=False,
                        help='add time delta in paraview')
-    parser.add_argument('-png', dest= 'png', action='store_true',
+    parser.add_argument('-png', dest= 'png', action='store_true',default=False,
                        help='save plots as png' )
+    parser.add_argument('-fn', dest= 'figname', type=str, default='',
+                       help='name of plot' )
+    parser.add_argument('-sa', dest= 'sens', action='store_true',default=False,
+                       help='plot sensitivity' )
+    parser.add_argument('-bm', dest= 'base_model', type=str, default='',
+                       help='base model for sensitivity' )
+    parser.add_argument('-tt', dest= 't_thres', type=float, default=0.0,
+                       help='temperature threshold' )
+    parser.add_argument('-rs', dest= 'rsquared', action='store_true',default=False,
+                       help='compute r-squared error and deviation from base model' )
+    parser.add_argument('-pk', dest= 'plot_k', action='store_true',default=False,
+                       help='plot permeability profiles' )
     
     args = parser.parse_args()
     
@@ -255,41 +401,48 @@ if __name__=='__main__':
     
     #get the well list
     wells = pd.read_excel(well_list)
-    wells = wells.values.flatten().astype(str)
+    wells = wells.values.T.flatten().astype(str)
     wells = wells[wells!='nan']
     
     #get DS
     wells_DS=pd.read_excel(wells_file,sheetname=None)
     
     
-    colors = ['blue','green','magenta','cyan']
+    colors = ['#1f77b4','#ff7f0e','#2ca02c','#d62728']
     
     if len(args.multi)>0:
-        cont_list = read_contours(model_names=args.multi,multi=True)
-        create_NS_plots(cont_list,model_names=args.multi)
-        create_pcp_plot(cont_list,model_names=args.multi)
+        if args.tplots or args.pplots:
+            cont_list = read_contours(model_names=args.multi,multi=True)
+            if args.tplots:
+                create_NS_plots(cont_list,model_names=args.multi,savetopdf=not args.png,basemodel=args.base_model,threshold=args.t_thres)
+            if args.pplots:
+                create_pcp_plot(cont_list,model_names=args.multi,savetopdf=not args.png)
+        if args.co2:
+            plot_co2(model_names=args.multi)
+        if args.water:
+            plot_water(model_names=args.multi)
     else:
         cont_list = read_contours([model_name],multi=False)
         
-    if args.tplots and args.png:
-        create_NS_plots(cont_list,[model_name],savetopdf=False)
-    elif args.tplots:
-        create_NS_plots(cont_list,[model_name],savetopdf=True)
-    if args.pplots and args.png:
-        create_pcp_plot(cont_list,[model_name],savetopdf=False)
-    elif args.pplots:
-        create_pcp_plot(cont_list,[model_name],savetopdf=True)
-    if args.co2:
-        plot_co2()
-    if args.water:
-        plot_water()
-    if args.paraview:
-        launch_paraview(ns_dir,args.td)
-    if args.paraview_preNS:
-        launch_paraview(preNS_dir,args.td)
-    if args.paraview_co2_stage1:
-        launch_paraview(co2_s1_dir,args.td)
-    if args.paraview_co2_stage2:
-        launch_paraview(co2_s2_dir,args.td)
-    if args.paraview_wat_stage1:
-        launch_paraview(wat_s1_dir,args.td)
+        if args.tplots and args.png:
+            create_NS_plots(cont_list,[model_name],savetopdf=False)
+        elif args.tplots:
+            create_NS_plots(cont_list,[model_name],savetopdf=True)
+        if args.pplots and args.png:
+            create_pcp_plot(cont_list,[model_name],savetopdf=False)
+        elif args.pplots:
+            create_pcp_plot(cont_list,[model_name],savetopdf=True)
+        if args.co2:
+            plot_co2(model_names=[model_name])
+        if args.water:
+            plot_water(model_names=[model_name])
+        if args.paraview:
+            launch_paraview(ns_dir,args.td)
+        if args.paraview_preNS:
+            launch_paraview(preNS_dir,args.td)
+        if args.paraview_co2_stage1:
+            launch_paraview(co2_s1_dir,args.td)
+        if args.paraview_co2_stage2:
+            launch_paraview(co2_s2_dir,args.td)
+        if args.paraview_wat_stage1:
+            launch_paraview(wat_s1_dir,args.td)

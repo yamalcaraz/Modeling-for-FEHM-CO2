@@ -61,15 +61,24 @@ def bottom_up(fluid, z_bot, z_top, dz, mflow, P, T_celsius, d, k, g=9.81):
     
     results_vals=[[z,P,h,rho,V,T_celsius,phase]]
     for i in np.arange(z_bot,z_top,dz):
-        z2,h2,P2=wellbore_step(fluid,z,dz,h,V,P,rho,d,k,g)
-        if P2<0.0: break
+#        print z, z_top
+        if z+dz > z_top:
+            z2,h2,P2=wellbore_step(fluid,z,z_top-z,h,V,P,rho,d,k,g)
+        else:
+            z2,h2,P2=wellbore_step(fluid,z,dz,h,V,P,rho,d,k,g)
+        
+        if P2<5E3: break
     
         h=h2
         P=P2
         z=z2
         #update rho
-        rho = PropsSI('D','H',h,'P',P,fluid)
-        phase = PhaseSI('H',h,'P',P,fluid)
+        try:
+            rho = PropsSI('D','H',h,'P',P,fluid)
+            phase = PhaseSI('H',h,'P',P,fluid)
+        except ValueError:
+            print 'Warning: Error in z={}'.format(z)
+            continue
         #update V
         V=mflow/rho/A #velocity updated with density
         #check Temp

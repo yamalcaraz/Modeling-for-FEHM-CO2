@@ -18,7 +18,7 @@ increased upflow to -12, increased uflow horizontal perm, decreased reservoir pe
 fixed the preNS state by removing the temperature gradient initialization
 
 got elevation contours from: https://philgis.org/
-used QGIS to extract a raster from the contour, used grid interpolation, inverse distance weighing algorithm, radius=2000
+used QGIS to extract a raster from the contour, used grid interpolation, inverse distance weighing algorithm, radius=2000, pixels = 200x200 meters
 extracted elevation contours
 remove nodes that are above the model to extract elevations
 
@@ -82,7 +82,7 @@ Model 3b : refined horizontal only
 
 5/17/2017
 Model 3d: optimize flow rates, change some permeability layer 0m
-Model 4: 4 times resolution from model final
+Model 4: 4 times horizontal resolution from model final
 
 Model 3e: adjust kl_mid perm from 1E-15 to 2E-15
 
@@ -91,3 +91,17 @@ Model 3e: adjust kl_mid perm from 1E-15 to 2E-15
 Model 3f: sensitivity wrt to ambient temperature:
 set BC from 20 degrees to  30 degrees C
 inj temp to 35 degrees C
+
+Model_5_marbel - this should be my baseline for grid sensitivity, ambient temp, and perm/por sensitivity
+try calibrating once again to match pressures
+set ambient to 25 degrees C
+inj temp to 30 degrees C
+reservoir and reservoir shallow from 5E-15 to 6E-15
+outside horizontal from 1.5E-15 to 1.75E-15
+
+rerun grid_model_4 for horizontal sensitivity
+done grid sensitivity
+ambient - try higher 35 deg ambient 40 inj temp
+
+5/20/2017
+porosity no effect in calibration - check effect in optimized models

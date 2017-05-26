@@ -539,8 +539,12 @@ def read_elevation_model(dat, elev_model_file):
                     if nd not in top_nodes:
                         top_nodes+=[nd]
                     break
-    top_nodes.sort()
+    
     print str(len(top_nodes)) + ' nodes found in top of model'
+    #Warning: add this for the sake of h_sens only
+    if model_name=='Model_5_h_sens':
+        top_nodes+=[n for n in dat.grid.nodelist if n.index==63209]
+    top_nodes.sort()
     zone_obj = fzone(index=11,type='nnum', nodelist=top_nodes, name='top_zone')
     dat.add(zone_obj)
     
