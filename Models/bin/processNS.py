@@ -122,7 +122,7 @@ def create_NS_plots(cont_list,model_names,savetopdf=True, basemodel='', threshol
         plot_sensitivity(profiles,args.base_model,threshold,savetopdf)
         
     if args.rsquared:
-        compute_rsquared(profiles,args.base_model,threshold)
+        compute_rsquared(profiles,args.base_model)
         
 def plot_sensitivity(profiles,base_model,threshold,savetopdf,temp_bounds=170):
     
@@ -161,7 +161,7 @@ def plot_sensitivity(profiles,base_model,threshold,savetopdf,temp_bounds=170):
     if savetopdf:
         pdf.close()
 
-def compute_rsquared(profiles,base_model,threshold):
+def compute_rsquared(profiles,base_model):
     
     rsquared_dict={}
     num_points={}
@@ -180,8 +180,28 @@ def compute_rsquared(profiles,base_model,threshold):
         
     n=sum([num_points[k] for k in num_points.keys()])
     rsquared=pd.DataFrame(rsquared_dict).T.sum()
-    std = np.sqrt(rsquared)/n    
+    std = np.sqrt(rsquared/n)    
     pd.DataFrame({'rsquared':rsquared,'std':std}).to_excel(args.figname+'rsquared.xlsx')
+    
+def compute_rsquared_pcp(profiles,base_model):
+    
+    profiles = {k:profiles[k] for k in profiles.keys() if profiles[k]}
+    models = [j for j in profiles[wells[0]].keys()  if j!=base_model]
+    rsquared_dict={m:[] for m in models}
+
+    
+    for i,w in enumerate(profiles.keys()):
+        print w
+        prof_dict = profiles[w]
+        base_p = prof_dict[base_model][0]
+        for mi, m in enumerate(models):
+            other_p=prof_dict[m][0]
+            rsquared_dict[m] += [(base_p-other_p)**2]
+    
+    rsquared=pd.DataFrame(rsquared_dict).sum()
+    n=rsquared.shape[0]
+    std = np.sqrt(rsquared/n)    
+    pd.DataFrame({'rsquared':rsquared,'std':std}).to_excel(args.figname+'rsquaredPCP.xlsx')
     
     
 def create_pcp_plot(cont_list,model_names, savetopdf=True):
@@ -192,8 +212,10 @@ def create_pcp_plot(cont_list,model_names, savetopdf=True):
     
     fig, ax = plt.subplots(figsize=(10,7)) 
     
+    profiles={}
+    
     for w in wells:
-        
+        profiles[w]= {}
         if w not in pcp_df['Well'].tolist(): continue
         
         #plot measured pcp first
@@ -214,7 +236,7 @@ def create_pcp_plot(cont_list,model_names, savetopdf=True):
             prof=cont.profile('P',coords)
             
             pcp_sim = np.interp(pcp_well['Depth, mRSL'],prof[:,2],prof[:,3])[0]
-        
+            profiles[w][model_names[ci]]=(pcp_sim,pcp_depth)
             sim_plots+=ax.plot(pcp_sim,pcp_depth,'bo',color=colors[ci],label=model_names[ci])
             if len(cont_list)==1:
                 ax.annotate(w, xy=(pcp_sim,pcp_depth),color=colors[ci],size='8')
@@ -228,6 +250,46 @@ def create_pcp_plot(cont_list,model_names, savetopdf=True):
         fig.savefig(args.figname + 'PCP_Plot.pdf')
     else:
         fig.savefig(args.figname + 'PCP_Plot.png')
+        
+    if args.sens:
+        create_pcp_plot_sa(profiles,model_names,args.base_model)
+    
+    if args.rsquared:
+        compute_rsquared_pcp(profiles,args.base_model)
+        
+def create_pcp_plot_sa(profiles,model_names,base_model):
+    
+    print 'plotting Pressure SA'
+    fig, ax = plt.subplots(figsize=(7,7))
+#    markers = ['o','+','^','*']
+    
+    model_names = [j for j in model_names if j!=base_model]
+    for iw,w in enumerate(wells):
+#        print w
+        if base_model in profiles[w].keys():
+            base_p = profiles[w][base_model][0]
+        else:
+            continue
+        sim_plots = []
+        for im,m in enumerate(model_names):
+            sim_p = profiles[w][m][0]
+            sim_plots += ax.plot(base_p,sim_p,c=colors[im],marker='o',ms=4, label=m)
+    
+    baseplot=ax.plot([0,30],[0,30],'k--',lw=2)
+    thres=0.5
+    thresplot=ax.plot([0+thres,30+thres],[0,30],'r--',lw=1)
+    ax.plot([0-thres,30-thres],[0,30],'r--',lw=1)
+    
+    ax.legend(sim_plots+baseplot+thresplot,
+              model_names+[base_model]+['{} MPa deviation'.format(thres)],
+              loc = 'best',prop={'size':8})
+    ax.set_title('PCP Plots')
+    ax.set_xlabel(base_model + ' Pressure (MPag)')
+    ax.set_ylabel('Simulated Pressure (MPag)')
+    ax.set_xlim(2,14)
+    ax.set_ylim(2,14)
+    
+    fig.savefig(args.figname + 'PCP_Plot_sa.png')
     
 def launch_paraview(run_dir,td):
     #post-processing
