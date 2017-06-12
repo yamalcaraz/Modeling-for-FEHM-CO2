@@ -77,14 +77,20 @@ def plot_contour(z, method = 'multiquadric'):
     ax.scatter(T[:,0], T[:,1], c='k', s=40)
     #label wells
     for label, x, y in zip(wells_with_data, T[:,0], T[:,1]):
-        ax.annotate(label, xy=(x, y),color='b',size='8')
+        ax.annotate(label, xy=(x, y),color='b',size='12')
     
     ax.grid(True)
     ax.set_xlabel('Easting, mE')
     ax.set_ylabel('Northing, mN')
     
+    fig.tight_layout()
     fig.savefig('contourT_'+str(z)+'_'+method+'.png',dpi=300)
     plt.close(fig)
+
+
+zlist = [0,-250,-500]
+for z in zlist:
+    plot_contour(z,method = 'multiquadric')
 
 zlist=[-250]
 

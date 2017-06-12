@@ -7,6 +7,7 @@ Created on Sat Mar 25 13:28:00 2017
 
 #process NS
 from fpost import fcontour
+from fgrid import fgrid
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -34,14 +35,14 @@ def plot_measured(ax, zd, fd):
     ax.plot(fd,zd,color='red',marker='^',linestyle='',label='Measured')
     
 def setup_plot(ax, well, xmin=0, xmax=350):
-    ax.legend(prop={'size':8})
+    ax.legend(prop={'size':8},loc='best')
     ax.set_title(well)
     ax.set_xlabel('Temperature (degC)')
     ax.set_ylabel('Elevation (mRSL)')
     ax.set_xlim(xmin,xmax)
 
 def setup_kplot(ax, well, xmin=np.log10(1E-18), xmax=np.log10(1E-11)):
-    ax.legend(prop={'size':8})
+    ax.legend(prop={'size':8},loc='best')
     ax.set_title(well)
     ax.set_xlabel('Permeability ($log_{10}m^2$)')
     ax.set_ylabel('Elevation (mRSL)')
@@ -238,8 +239,8 @@ def create_pcp_plot(cont_list,model_names, savetopdf=True):
             pcp_sim = np.interp(pcp_well['Depth, mRSL'],prof[:,2],prof[:,3])[0]
             profiles[w][model_names[ci]]=(pcp_sim,pcp_depth)
             sim_plots+=ax.plot(pcp_sim,pcp_depth,'bo',color=colors[ci],label=model_names[ci])
-            if len(cont_list)==1:
-                ax.annotate(w, xy=(pcp_sim,pcp_depth),color=colors[ci],size='8')
+#            if len(cont_list)==1:
+#                ax.annotate(w, xy=(pcp_sim,pcp_depth),color=colors[ci],size='8')
     
     ax.legend(meas_plot + sim_plots,['Measured']+model_names, loc = 'best',prop={'size':8})
     ax.set_title('PCP Plots')
@@ -297,7 +298,8 @@ def launch_paraview(run_dir,td):
     cont=fcontour(run_dir+'\\'+model_name+'.*_days_sca_node.csv')
     
     #launch paraview
-    cont.paraview(grid_3D_path, exe=r"D:\ParaView 5.0.0\bin\paraview.exe",time_derivatives=td)
+    cont.paraview(grid_3D_path, exe=r"D:\ParaView 5.0.0\bin\paraview.exe",
+                  time_derivatives=td,filename=args.figname)
     
     
 def delete_temp_files():
@@ -335,7 +337,9 @@ def plot_hist(fluid,param,param_label,model_names):
     fig, ax = plt.subplots() 
     
     if args.multi:
-        for model_name,ls in zip(model_names,linestyles[:len(model_names)]):
+        if args.multirow: fig, ax = plt.subplots(len(model_names))
+
+        for imodel,model_name,ls in zip(range(len(model_names)),model_names,linestyles[:len(model_names)]):
             hist=pd.read_excel('{}\\{}\\ModelData.xlsx'.format(work_dir,model_name),sheetname='hist')
             
             s1=pd.read_csv(work_dir + '\\{1}\\{0}_Stage1\\{1}_{2}_his.csv'.format(fluid,model_name,param))
@@ -350,7 +354,10 @@ def plot_hist(fluid,param,param_label,model_names):
             co2_df.sort_values('Time (days)',inplace=True)
             co2_df.set_index('Time (days)',inplace=True)
             for column,color in zip(co2_df.columns,colors[:len(co2_df.columns)]):
-                co2_df[column].plot(ax = ax, marker='', c=color, ls=ls, ms=2)
+                if args.multirow:
+                    co2_df[column].plot(ax = ax[imodel], marker='', c=color, ms=2)
+                else:
+                    co2_df[column].plot(ax = ax, marker='', c=color, ls=ls, ms=2)
     else:
         model_name=model_names[0]
         hist=pd.read_excel(model_data,sheetname='hist')
@@ -367,27 +374,71 @@ def plot_hist(fluid,param,param_label,model_names):
         co2_df.sort_values('Time (days)',inplace=True)
         co2_df.set_index('Time (days)',inplace=True)
         co2_df.plot(ax = ax, marker='o', ls='', ms=2)
+    
+    if not isinstance(ax,np.ndarray):
+        ax = [ax]
+    
+    for _ax in ax:    
+        _ax.set_ylabel(param_label)
+        _ax.set_xlim([0,365.25*10])
+        _ax.grid(True)
+        minorLocator=AutoMinorLocator(2)
+        _ax.xaxis.set_minor_locator(minorLocator)
         
-    ax.set_ylabel(param_label)
-    ax.set_xlim([0,365.25*10])
-    ax.grid(True)
-    minorLocator=AutoMinorLocator(2)
-    ax.xaxis.set_minor_locator(minorLocator)
-    
-    if fluid=='CO2' and 'pres' in param:
-        pcrit_CO2 = 7.39 #MPa
-        ax.plot([0,365.25*10],[pcrit_CO2,pcrit_CO2],'k--',label = 'CO$_2$ Critical Pressure')
-    
-#    lgd=ax.legend(prop={'size':8})
-    if 'pres' in param or 'mt' in param:
-        lgd=ax.legend(bbox_to_anchor=(1.1,1.1),prop={'size':8})
-    else:
-        lgd=ax.legend(loc='best',prop={'size':8})
-    
-    fig.set_size_inches((7,5))
+        if fluid=='CO2' and 'pres' in param:
+            pcrit_CO2 = 7.39 #MPa
+            _ax.plot([0,365.25*10],[pcrit_CO2,pcrit_CO2],'k--',label = 'CO$_2$ Critical Pressure')
+        
+    #    lgd=ax.legend(prop={'size':8})
+        if 'mt' in param:
+            lgd=_ax.legend(bbox_to_anchor=(1.1,1.1),prop={'size':8})
+        else:
+            lgd=_ax.legend(loc='best',prop={'size':8})
+        
+    fig.set_size_inches((7,len(model_names)*3))
+    fig.tight_layout()
     fig.savefig(args.figname+fluid+'_'+param+'_history.png',bbox_extra_artists=(lgd,), bbox_inches='tight')
     
     return co2_df
+
+def plot_perm_slices(cont_list):
+    cont = cont_list[0]
+    x1,y1 = [517147.435,767258.665]
+    x2,y2 = [534070.715,781211.863]
+    
+#    fig,ax= plt.subplots()
+    gridlines = []
+    grid = fgrid()
+    grid.read(dirs['grid_2D_path'].values[0])
+        
+    for c in grid.connlist:
+        
+        points = np.array([(c.nodes[0].position[0],c.nodes[0].position[1]),
+                           (c.nodes[1].position[0],c.nodes[1].position[1])])
+        ind = np.lexsort((points[:,0],points[:,1]))
+        gridlines += [points[ind]]
+
+    for z in cont.z:
+        ax=cont.slice_plot('perm_z',slice=['z',z],divisions=[1000,1000],
+                    levels=15,cbar=True, xlims=[x1,x2], ylims=[y1,y2])
+    
+        for points in gridlines:
+            ax.plot(points[:,0],points[:,1],'k-',lw=0.5)
+        
+        fig = ax.get_figure()
+        fig.set_size_inches(10,10)
+        fig.savefig('permzplot_{}.png'.format(z))
+        
+    for z in cont.z:
+        ax=cont.slice_plot('perm_x',slice=['z',z],divisions=[1000,1000],
+                    levels=15,cbar=True, xlims=[x1,x2], ylims=[y1,y2])
+    
+        for points in gridlines:
+            ax.plot(points[:,0],points[:,1],'k-',lw=0.5)
+        
+        fig = ax.get_figure()
+        fig.set_size_inches(10,10)
+        fig.savefig('permxplot_{}.png'.format(z))
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Process NS model results')
@@ -395,6 +446,8 @@ if __name__=='__main__':
                        help='create temp NS plots')
     parser.add_argument('-m', dest= 'multi', type=str, nargs='+',default=[],
                        help='create multi temp NS and pcp plots')
+    parser.add_argument('-mr', dest= 'multirow', action='store_true',
+                       help='set multi plot with multiple rows in figure')
     parser.add_argument('-p', dest= 'pplots', action='store_true',
                        help='create pcp NS plots')
     parser.add_argument('-pv', dest= 'paraview', action='store_true',
@@ -416,7 +469,7 @@ if __name__=='__main__':
     parser.add_argument('-png', dest= 'png', action='store_true',default=False,
                        help='save plots as png' )
     parser.add_argument('-fn', dest= 'figname', type=str, default='',
-                       help='name of plot' )
+                       help='name of plot,file name of vtk' )
     parser.add_argument('-sa', dest= 'sens', action='store_true',default=False,
                        help='plot sensitivity' )
     parser.add_argument('-bm', dest= 'base_model', type=str, default='',

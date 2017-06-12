@@ -334,6 +334,7 @@ def run_first_stage(fluid):
     ##    
     #    add relative perm
     #     linear relperm model, nice to sub in when things are misbehaving
+#        rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
         rlp = fmodel('rlp',index=17,param=[.05,1,1,0,1,1,0,0,1,1,1,0,1,0])
         dat.add(rlp)
         #rlpm=frlpm(group=1,zone=dat.zone[0])

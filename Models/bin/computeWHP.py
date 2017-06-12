@@ -55,7 +55,7 @@ def get_data(fluid, work_dir):
     
     pres_df['Time (days)']=pres_df['Time (days)'].round(5)
     pres_df.sort_values('Time (days)',inplace=True)
-    pres_df.drop_duplicates(inplace=True)
+    pres_df.drop_duplicates(inplace=True,subset='Time (days)',keep='last')
     pres_df.set_index('Time (days)',inplace=True)
     pres_df.columns=[int(i.split()[-1]) for i in pres_df.columns.tolist()]
 
@@ -71,7 +71,7 @@ def get_data(fluid, work_dir):
     
     temp_df['Time (days)']=temp_df['Time (days)'].round(5)
     temp_df.sort_values('Time (days)',inplace=True)
-    temp_df.drop_duplicates(inplace=True)
+    temp_df.drop_duplicates(inplace=True,subset='Time (days)',keep='last')
     temp_df.set_index('Time (days)',inplace=True)
     temp_df.columns=[int(i.split()[-1]) for i in temp_df.columns.tolist()]
     
@@ -305,7 +305,7 @@ def plot_whp(fluid):
     ax.grid(True)
     minorLocator=AutoMinorLocator(2)
     ax.xaxis.set_minor_locator(minorLocator)
-    ax.legend(prop={'size':8})
+    ax.legend(prop={'size':8},bbox_to_anchor=(1.1,1.1))
     
     fig=ax.get_figure()
     fig.set_size_inches((7,5))
@@ -343,10 +343,10 @@ def plot_q(fluid):
     ax.grid(True)
     minorLocator=AutoMinorLocator(2)
     ax.xaxis.set_minor_locator(minorLocator)
-    ax.legend(prop={'size':8})
+    ax.legend(prop={'size':8},bbox_to_anchor=(1.1,1.1))
     
     fig=ax.get_figure()
-    fig.set_size_inches((7,5))
+    fig.set_size_inches((8,5))
     fig.savefig(args.figname+fluid+'_'+'q_history.png')
     
     
@@ -373,7 +373,7 @@ def plot_visc(fluid):
     ax.grid(True)
     minorLocator=AutoMinorLocator(2)
     ax.xaxis.set_minor_locator(minorLocator)
-    ax.legend(prop={'size':8})
+    ax.legend(prop={'size':8},bbox_to_anchor=(1.1,1.1))
     
     fig=ax.get_figure()
     fig.set_size_inches((7,5))
